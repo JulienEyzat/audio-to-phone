@@ -641,40 +641,34 @@ class MTP:
 
 		return self.mtp.LIBMTP_Get_Deviceversion(self.device)
 
-	def create_files_tree(self):
-		pass
+	def recursive_explore_folder(self, current_folder, parent_folder_node):
+		current_folder_node = anytree.Node(current_folder.name.decode("utf-8"), parent=parent_folder_node, item_id=current_folder.folder_id)
+		if not current_folder.child and not current_folder.sibling:
+			return
+		else:
+			if current_folder.child:
+				self.recursive_explore_folder(current_folder.child.contents, current_folder_node)
+			if current_folder.sibling:
+				self.recursive_explore_folder(current_folder.sibling.contents, parent_folder_node)
 
-	# Too long to use
-	def is_files_in_directory(self, files, parent_id, callback=None):
-		if (self.device == None):
-			raise NotConnected
+	def explore_files(self, current_file, root):
+		while current_file.next:
+			current_file = current_file.next.contents
+			parent_node = anytree.find_by_attr(root, name="item_id", value=current_file.parent_id)
+			anytree.Node(current_file.filename.decode("utf-8"), parent=parent_node, item_id=current_file.item_id)
 
-		if (callback != None):
-			callback = Progressfunc(callback)
+	def create_files_tree(self, callback=None):
+		root = anytree.Node("Root", item_id=0)
 
-		files = self.mtp.LIBMTP_Get_Filelisting_With_Callback(self.device, callback, None)
-		device_item_ids = []
-		device_filenames = []
-		device_parent_ids = []
-		next = files
+		# Add folders to the tree
+		all_folders = self.mtp.LIBMTP_Get_Folder_List(self.device)
+		self.recursive_explore_folder(all_folders.contents, root)
 
-		while next:
-			device_item_ids.append(next.contents.item_id)
-			device_filenames.append(next.contents.filename)
-			device_parent_ids.append(next.contents.parent_id)
-			if (next.contents.next == None):
-				break
-			next = next.contents.next
+		# Add files to the tree
+		all_files = self.mtp.LIBMTP_Get_Filelisting_With_Callback(self.device, callback, None)
+		self.explore_files(all_files.contents, root)
 
-		exists_list = []
-		for my_file_name in files:
-			file_exists = False
-			if my_file_name in device_filenames:
-				if device_parent_ids[device_filenames.index(my_file_name)] == parent_id:
-					file_exists = True
-			exists_list.append(file_exists)
-		return exists_list
-		
+		self.root = root		
 
 	def get_filelisting(self, callback=None):
 		"""
@@ -932,6 +926,23 @@ class MTP:
 			return LIBMTP_Filetype["JPX"]
 		else:
 			return LIBMTP_Filetype["UNKNOWN"]
+
+	def exists_file(self, file_path):
+		r = anytree.Resolver('name')
+		try:
+			file_node = r.get(self.root, file_path)
+			return True
+		except anytree.resolver.ResolverError:
+			return False
+
+	def copy_file_from_file(self, source_path, target_path):
+		target_dirname, target_basename = os.path.split(target_path)
+
+		r = anytree.Resolver('name')
+		target_parent_node = r.get(self.root, target_dirname)
+		target_parent_id = target_parent_node.item_id
+
+		self.send_file_from_file(source_path, target_basename, target_parent_id)
 
 	def send_file_from_file(self, source, target, parent_id, callback=None):
 		"""
@@ -1406,7 +1417,15 @@ class MTP:
 				break
 		return folder_id
 
-	def exists_folder(self, name, parent_directory_id):
+	def exists_folder(self, folder_path):
+		r = anytree.Resolver('name')
+		try:
+			folder_node = r.get(self.root, folder_path)
+			return True
+		except anytree.resolver.ResolverError:
+			return False
+
+	def exists_folder_old(self, name, parent_directory_id):
 		if (self.device == None):
 			raise NotConnected
 
@@ -1452,7 +1471,17 @@ class MTP:
 		
 		return exists
 
-	def create_folder(self, name, parent=0, storage=0):
+	def create_folder(self, folder_path):
+
+		dirname, basename = os.path.split(folder_path)
+
+		r = anytree.Resolver('name')
+		parent_folder_node = r.get(self.root, dirname)
+		parent_id = parent_folder_node.item_id
+
+		self.create_folder_by_id(basename, parent=parent_id)
+
+	def create_folder_by_id(self, name, parent=0, storage=0):
 		"""
 			This creates a new folder in the parent. If the parent 
 			is 0, it will go in the main directory.
