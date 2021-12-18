@@ -1,2 +1,4 @@
 tqdm
 youtube_dl
+anytree
+eyed3

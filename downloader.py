@@ -1,4 +1,5 @@
 import argparse
+import eyed3
 import os
 import youtube_dl
 
@@ -39,10 +40,21 @@ def download_audio(links, output_directory):
     with youtube_dl.YoutubeDL(ydl_opts) as ydl:
         ydl.download(links)
 
+def update_metadata(podcasts_directory):
+    for podcast in os.listdir(podcasts_directory):
+        podcast_path = os.path.join(podcasts_directory, podcast)
+        podcast_name = os.path.splitext(podcast)[0]
+        audiofile = eyed3.load(podcast_path)
+        if not audiofile.tag.album:
+            audiofile.tag.album = podcast_name
+            audiofile.tag.save()
+
 if __name__ == "__main__":
     playlists_directory = os.path.join("data", "playlists")
     podcasts_directory = os.path.join("data", "podcasts")
     init_folders(playlists_directory, podcasts_directory)
 
     links, output_directory = parse_args()
-    download_audio(links, output_directory)
+    # download_audio(links, output_directory)
+
+    update_metadata(podcasts_directory)
