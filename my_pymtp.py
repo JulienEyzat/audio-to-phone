@@ -1088,6 +1088,13 @@ class MTP:
 		usedspace = storage.MaxCapacity - storage.FreeSpaceInBytes
 		return ((float(usedspace) / float(storage.MaxCapacity)) * 100)
 
+	def delete_file(self, file_path):
+		r = anytree.Resolver('name')
+		file_node = r.get(self.root, file_path)
+		file_id = file_node.item_id
+
+		self.delete_object(file_id)
+
 	def delete_object(self, object_id):
 		"""
 			Deletes the object off the connected device.
@@ -1202,6 +1209,13 @@ class MTP:
 		if (ret != 0):
 			self.debug_stack()
 			raise CommandFailed
+
+	def listdir(self, folder_path):
+		r = anytree.Resolver('name')
+		folder_node = r.get(self.root, folder_path)
+		file_nodes = folder_node.leaves
+		file_names = [ file_node.name for file_node in file_nodes ]
+		return file_names
 
 	def explore_children(self, directory_id):
 		folders = self.mtp.LIBMTP_Get_Folder_List(self.device)

@@ -35,6 +35,13 @@ def copy_files_to_phone(mtp, computer_directory, phone_directory):
         if not mtp.exists_file(phone_file_path):
             mtp.copy_file_from_file(computer_file_path, phone_file_path)
 
+    # Delete files in the phone directory that are not in the computer directory
+    computer_files = os.listdir(computer_directory)
+    for phone_file_name in mtp.listdir(phone_directory):
+        if phone_file_name not in computer_files:
+            phone_file_path = os.path.join(phone_directory, phone_file_name)
+            mtp.delete_file(phone_file_path)
+
 if __name__ == "__main__":
     # Init variables
     phone_base_path = os.path.join("Download", "FromComputer")
