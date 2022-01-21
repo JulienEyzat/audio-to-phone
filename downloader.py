@@ -55,6 +55,6 @@ if __name__ == "__main__":
     init_folders(playlists_directory, podcasts_directory)
 
     links, output_directory = parse_args()
-    # download_audio(links, output_directory)
+    download_audio(links, output_directory)
 
     update_metadata(podcasts_directory)
