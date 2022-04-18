@@ -2,3 +2,6 @@ tqdm
 youtube_dl
 anytree
 eyed3
+
+feedparser
+requests
