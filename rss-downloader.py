@@ -58,10 +58,14 @@ def get_download_link(title):
 
     return download_link
 
-def requests_downloader(audio_link, output_directory):
+def requests_downloader(title, audio_link, output_directory):
     audio = requests.get(audio_link, stream=True)
     # Total size in bytes.
-    filename = audio.headers.get("content-disposition", 0).replace("attachment; filename=\"", "").replace("\";", "")
+    filename = audio.headers.get("content-disposition", "")
+    if not filename:
+        filename = title.lower().replace(" ", "_")
+    else:
+        filename = filename.replace("attachment; filename=\"", "").replace("\";", "")
     output_file = os.path.join(podcasts_directory, filename)
     total_size = int(audio.headers.get('content-length', 0))
     block_size = 1024 #1 Kibibyte
@@ -95,7 +99,6 @@ def update_metadata(podcasts_directory):
         podcast_path = os.path.join(podcasts_directory, podcast)
         podcast_name = os.path.splitext(podcast)[0]
         audiofile = eyed3.load(podcast_path)
-        print(audiofile)
         if audiofile:
             if not audiofile.tag.album:
                 audiofile.tag.album = podcast_name
@@ -110,7 +113,7 @@ if __name__ == "__main__":
     for title, date, begin_or_end_date in zip(filtered_titles, filtered_dates, begin_or_end_dates):
         print(title, date)
         audio_link = get_download_link(title)
-        requests_downloader(audio_link, podcasts_directory)
+        requests_downloader(title, audio_link, podcasts_directory)
         update_json(begin_date, end_date, date, begin_or_end_date)
     
     update_metadata(podcasts_directory)
