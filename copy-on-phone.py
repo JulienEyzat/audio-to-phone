@@ -26,7 +26,7 @@ def init_phone_folders(mtp, phone_base_path, phone_playlists_directory_path, pho
     if not mtp.exists_folder(folder_path=phone_podcasts_directory_path):
         mtp.create_folder(folder_path=phone_podcasts_directory_path)
 
-def copy_files_to_phone(mtp, computer_directory, phone_directory):
+def copy_files_to_phone(mtp, computer_directory, phone_directory, do_delete=True):
     for to_copy_file in tqdm.tqdm(os.listdir(computer_directory)):
         # Paths
         computer_file_path = os.path.join(computer_directory, to_copy_file)
@@ -36,11 +36,13 @@ def copy_files_to_phone(mtp, computer_directory, phone_directory):
             mtp.copy_file_from_file(computer_file_path, phone_file_path)
 
     # Delete files in the phone directory that are not in the computer directory
-    computer_files = os.listdir(computer_directory)
-    for phone_file_name in mtp.listdir(phone_directory):
-        if phone_file_name not in computer_files:
-            phone_file_path = os.path.join(phone_directory, phone_file_name)
-            mtp.delete_file(phone_file_path)
+    # To fix
+    if do_delete:
+        computer_files = os.listdir(computer_directory)
+        for phone_file_name in mtp.listdir(phone_directory):
+            if phone_file_name not in computer_files:
+                phone_file_path = os.path.join(phone_directory, phone_file_name)
+                mtp.delete_file(phone_file_path)
 
 if __name__ == "__main__":
     # Init variables
@@ -56,7 +58,7 @@ if __name__ == "__main__":
     init_phone_folders(mtp, phone_base_path, phone_playlists_directory_path, phone_podcasts_directory_path)
 
     # Copy files
-    copy_files_to_phone(mtp, computer_playlist_directory, phone_playlists_directory_path)
+    copy_files_to_phone(mtp, computer_playlist_directory, phone_playlists_directory_path, do_delete=False)
     copy_files_to_phone(mtp, computer_podcast_directory, phone_podcasts_directory_path)
 
     # Disconnect
