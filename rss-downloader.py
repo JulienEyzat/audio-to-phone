@@ -64,6 +64,9 @@ def requests_downloader(title, audio_link, output_directory):
     filename = audio.headers.get("content-disposition", "")
     if not filename:
         filename = title.lower().replace(" ", "_")
+        filename = filename.replace(",", "_")
+        filename = filename.replace("'", "_")
+        filename = filename.replace(":", "_")
     else:
         filename = filename.replace("attachment; filename=\"", "").replace("\";", "")
     output_file = os.path.join(podcasts_directory, filename)
