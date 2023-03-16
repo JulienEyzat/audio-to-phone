@@ -1,122 +1,102 @@
-import feedparser
-import requests
-import tqdm
+# Internal libs
 import datetime
 import json
 import os
-import eyed3
+import time
+import unicodedata
+# External libs
+import feedparser
+import requests
+import tqdm
+
+DATES_FILE_PATH = "already_dl.json"
+DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
 
 def get_lim_dates():
-    with open("already_dl.json") as f:
-        lim_dates = json.load(f)
-    begin_date = datetime.datetime.strptime(lim_dates["begin_date"], "%Y-%m-%d %H:%M:%S%z")
-    end_date = datetime.datetime.strptime(lim_dates["end_date"], "%Y-%m-%d %H:%M:%S%z")
+    if not os.path.isfile(DATES_FILE_PATH):
+        begin_date = datetime.datetime.now()
+        end_date = datetime.datetime.now()
+    else:
+        with open(DATES_FILE_PATH) as f:
+            lim_dates = json.load(f)
+        begin_date = datetime.datetime.strptime(lim_dates["begin_date"], DATETIME_FORMAT)
+        end_date = datetime.datetime.strptime(lim_dates["end_date"], DATETIME_FORMAT)
     return begin_date, end_date
 
-def get_titles():
+def get_thinkerview_infos():
+    thinkerview_infos = []
     feed = feedparser.parse("https://www.thinkerview.com/feed/")
-
-    titles = []
-    dates = []
     for entry in feed.entries:
-        categories = [ entry.tags[i].term for i in range(len(entry.tags)) ]
-        if "Veille" not in categories:
-            titles.append(entry.title)
-            # Thu, 04 Jul 2013 17:11:48 +0000
-            date = datetime.datetime.strptime(entry.published, "%a, %d %b %Y %H:%M:%S %z")
-            dates.append(date)
-    
-    dates, titles = zip(*sorted(zip(dates, titles), reverse=True))
-    return titles, dates
+        if entry["author"] != "veilleur":
+            title = entry["link"].replace("https://www.thinkerview.com/", "").replace("/", "")
+            interview_id = entry["id"].replace("https://www.thinkerview.com/?p=", "")
+            link = f"https://www.thinkerview.com/podcast-download/{interview_id}/{title}.mp3?ref=download"
+            date = datetime.datetime.fromtimestamp(time.mktime(entry["published_parsed"]))
+            thinkerview_info = {
+                "title": title,
+                "link": link,
+                "date": date
+            }
+            thinkerview_infos.append(thinkerview_info)
+    return thinkerview_infos
 
-def get_recent_titles(begin_date, end_date, titles, dates, title_number):
-    filtered_titles = []
-    filtered_dates = []
-    begin_or_end_dates = []
-    for title, date in zip(titles, dates):
-        if len(filtered_titles) < 5:
-            if date > end_date or date < begin_date:
-                filtered_titles.append(title)
-                filtered_dates.append(date)
-                if date > end_date:
-                    begin_or_end_dates.append("end")
-                else:
-                    begin_or_end_dates.append("begin")
-    return filtered_titles, filtered_dates, begin_or_end_dates
+def filter_sort_infos(thinkerview_infos, begin_date, end_date, n_last):
+    # Filter by dates
+    thinkerview_infos = [ info for info in thinkerview_infos if info["date"] < begin_date or end_date < info["date"] ]
+    # Sort by dates
+    thinkerview_infos.sort(key=lambda info:info['date'], reverse=True)
+    # Get n last
+    thinkerview_infos = thinkerview_infos[:n_last]
+    return thinkerview_infos
 
-def get_download_link(title):
-    feed = feedparser.parse("https://www.thinkerview.com/feed/")
+def download(thinkerview_infos, output_directory):
+    for info in thinkerview_infos:
+        print(info["title"])
+        output_path = os.path.join(output_directory, f"{info['title']}.mp3")
+        requests_downloader(info["link"], output_path)
 
-    download_link = None
-    for entry in feed.entries:
-        categories = [ entry.tags[i].term for i in range(len(entry.tags)) ]
-        if "Veille" not in categories:
-            if entry.title == title:
-                interview_id = entry.guid.split("p=")[1]
-                interview_name = entry.link.replace("https://www.thinkerview.com/", "").replace("/", "")
-                download_link = "https://www.thinkerview.com/podcast-download/%s/%s.mp3?ref=download" %(interview_id, interview_name)
-
-    return download_link
-
-def requests_downloader(title, audio_link, output_directory):
-    audio = requests.get(audio_link, stream=True)
-    # Total size in bytes.
-    filename = audio.headers.get("content-disposition", "")
-    if not filename:
-        filename = title.lower().replace(" ", "_")
-        filename = filename.replace(",", "_")
-        filename = filename.replace("'", "_")
-        filename = filename.replace(":", "_")
-    else:
-        filename = filename.replace("attachment; filename=\"", "").replace("\";", "")
-    output_file = os.path.join(podcasts_directory, filename)
-    total_size = int(audio.headers.get('content-length', 0))
+def requests_downloader(link, output_path):
+    file_stream = requests.get(link, stream=True)
+    total_size = int(file_stream.headers.get('content-length', 0)) # Total size in bytes.
     block_size = 1024 #1 Kibibyte
-    t=tqdm.tqdm(total=total_size, unit='iB', unit_scale=True)
-    with open(output_file, 'wb') as file:
-        for data in audio.iter_content(block_size):
-            t.update(len(data))
-            file.write(data)
-    t.close()
-    if total_size != 0 and t.n != total_size:
-        print("ERROR, something went wrong")
+    with tqdm.tqdm(total=total_size, unit='iB', unit_scale=True) as pbar:
+        with open(output_path, 'wb') as file:
+            for data in file_stream.iter_content(block_size):
+                pbar.update(len(data))
+                file.write(data)
 
-def update_json(begin_date, end_date, date, begin_or_end_date):
-    new_json = {}
-    begin_date_str = begin_date.strftime("%Y-%m-%d %H:%M:%S%z")
-    end_date_str = end_date.strftime("%Y-%m-%d %H:%M:%S%z")
-    date_str = date.strftime("%Y-%m-%d %H:%M:%S%z")
-
-    if begin_or_end_date == "begin":
-        new_json["begin_date"] = date_str
-        new_json["end_date"] = end_date_str
+def update_dates(old_begin_date, old_end_date, thinkerview_infos):
+    # Get date to write
+    new_begin_date = thinkerview_infos[0]["date"]
+    new_end_date = thinkerview_infos[-1]["date"]
+    if old_begin_date > new_begin_date:
+        kept_begin_date = new_begin_date
     else:
-        new_json["begin_date"] = begin_date_str
-        new_json["end_date"] = date_str
+        kept_begin_date = old_begin_date
+    if old_end_date < new_end_date:
+        kept_end_date = new_end_date
+    else:
+        kept_end_date = old_end_date
+    # Write dates
+    kept_dates = {
+        "begin_date": kept_begin_date.strftime(DATETIME_FORMAT),
+        "end_date": kept_end_date.strftime(DATETIME_FORMAT)
+    }
+    with open(DATES_FILE_PATH, 'w') as f:
+        json.dump(kept_dates, f)
     
-    with open('already_dl.json', 'w') as f:
-        json.dump(new_json, f)
-
-def update_metadata(podcasts_directory):
-    for podcast in os.listdir(podcasts_directory):
-        podcast_path = os.path.join(podcasts_directory, podcast)
-        podcast_name = os.path.splitext(podcast)[0]
-        audiofile = eyed3.load(podcast_path)
-        if audiofile:
-            if not audiofile.tag.album:
-                audiofile.tag.album = podcast_name
-                audiofile.tag.save()
-
+def main():
+    # Get thinkerview infos from rss feed
+    thinkerview_infos = get_thinkerview_infos()
+    # Get previous lim dates
+    begin_date, end_date = get_lim_dates()
+    # Filter podcasts with dates
+    thinkerview_infos = filter_sort_infos(thinkerview_infos, begin_date, end_date, n_last=5)
+    # Download
+    output_directory = os.path.join("data", "podcasts")
+    download(thinkerview_infos, output_directory)
+    # Update lim dates
+    update_dates(begin_date, end_date, thinkerview_infos)
 
 if __name__ == "__main__":
-    podcasts_directory = os.path.join("data", "podcasts")
-    begin_date, end_date = get_lim_dates()
-    titles, dates = get_titles()
-    filtered_titles, filtered_dates, begin_or_end_dates = get_recent_titles(begin_date, end_date, titles, dates, 5)
-    for title, date, begin_or_end_date in zip(filtered_titles, filtered_dates, begin_or_end_dates):
-        print(title, date)
-        audio_link = get_download_link(title)
-        requests_downloader(title, audio_link, podcasts_directory)
-        update_json(begin_date, end_date, date, begin_or_end_date)
-    
-    update_metadata(podcasts_directory)
+    main()
