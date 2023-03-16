@@ -1,6 +1,5 @@
-tqdm
-youtube_dl
 anytree
-
 feedparser
 requests
+tqdm
+youtube_dl

@@ -1,6 +1,8 @@
+# Internal libs
 import argparse
-import eyed3
 import os
+# External libs
+import eyed3
 import youtube_dl
 
 def parse_args():
