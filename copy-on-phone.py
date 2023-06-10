@@ -61,7 +61,7 @@ def main():
     init_phone_folders(mtp, phone_base_path, phone_playlists_directory_path, phone_podcasts_directory_path)
 
     # Copy files
-    copy_files_to_phone(mtp, computer_playlist_directory, phone_playlists_directory_path, do_delete=False)
+    copy_files_to_phone(mtp, computer_playlist_directory, phone_playlists_directory_path)
     copy_files_to_phone(mtp, computer_podcast_directory, phone_podcasts_directory_path)
 
     # Disconnect

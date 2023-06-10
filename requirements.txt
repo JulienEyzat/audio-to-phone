@@ -2,4 +2,4 @@ anytree
 feedparser
 requests
 tqdm
-youtube_dl
+yt-dlp
